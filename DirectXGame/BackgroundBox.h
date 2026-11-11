@@ -11,7 +11,7 @@
 class BackgroundBox {
 public:
 	void Initialize(KamataEngine::Model* frameModel, KamataEngine::Model* starModel, KamataEngine::Model* moonModel);
-	void Update(const KamataEngine::Vector3& playerPos);
+	void Update(const KamataEngine::Vector3& playerPos, KamataEngine::LightGroup* lightGroup = nullptr);
 	// 内部で Model::PreDraw(kNone)/PostDraw を行う
 	void Draw(const KamataEngine::Camera& camera);
 
@@ -20,7 +20,8 @@ private:
 		KamataEngine::WorldTransform worldTransform;
 		KamataEngine::Vector3 scale{1, 1, 1};
 		KamataEngine::Vector3 rotation{0, 0, 0};
-		KamataEngine::Vector3 offset{0, 0, 0}; // 箱の中心からの位置
+		KamataEngine::Vector3 offset{0, 0, 0};  // 箱の中心からの位置
+		KamataEngine::Vector3 forward{0, 0, 1}; // モデルが向いている正面方向ベクトル
 	};
 
 	void UpdatePart(Part& part, const KamataEngine::Vector3& base);
@@ -37,9 +38,14 @@ private:
 	bool firstUpdate_ = true;
 
 	// ---- 調整用 ----
-	static constexpr float kPlateScale = 2.5f;    // 板の拡大率
-	static constexpr int kStarsPerPlate = 50;     // 板1枚あたりの星の数
-	static constexpr float kStarScaleMin = 0.8f;  // 星の大きさ(倍率)
+	static constexpr float kPlateScale = 2.5f;   // 板の拡大率
+	static constexpr int kStarsPerPlate = 50;    // 板1枚あたりの星の数
+	static constexpr float kStarScaleMin = 0.8f; // 星の大きさ(倍率)
 	static constexpr float kStarScaleMax = 2.4f;
 	static constexpr float kMoonScale = 12.0f;
+
+	// 星のポイントライト設定
+	const KamataEngine::Vector3 starLightColor_ = {1.0f, 0.55f, 0.10f}; // オレンジ色
+	static constexpr float kStarLightIntensity = 4.0f;                  // 強度
+	static constexpr float kStarFrontOffset = 1.2f;                     // 星の正面方向への手前移動オフセット量
 };

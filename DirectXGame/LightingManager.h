@@ -22,4 +22,34 @@ public:
 
 private:
 	KamataEngine::LightGroup* lightGroup_ = nullptr;
+
+	// 環境光：夜の深みのある青
+	KamataEngine::Vector3 ambientColor_ = {0.12f, 0.15f, 0.35f};
+
+	// 平行光源0：月明かりの方向光（青白）
+	bool dirLight0Active_ = true;
+	KamataEngine::Vector3 dirLight0Dir_ = {-1.0f, 0.8f, -0.6f};
+	KamataEngine::Vector3 dirLight0Color_ = {0.40f, 0.55f, 0.95f};
+
+	// 平行光源1：輪郭強調（リムライト）
+	bool dirLight1Active_ = true;
+	KamataEngine::Vector3 dirLight1Dir_ = {0.3f, 0.2f, 1.0f};
+	KamataEngine::Vector3 dirLight1Color_ = {0.20f, 0.18f, 0.40f};
+
+	// 点光源0：プレイヤーのランタン（暖色）
+	bool pointLight0Active_ = true;
+	KamataEngine::Vector3 pointLight0Color_ = {1.0f, 0.70f, 0.40f};
+	float pointLight0Intensity_ = 2.5f;
+	float pointLight0Radius_ = 12.0f;
+	float pointLight0Decay_ = 1.5f;
+	KamataEngine::Vector3 lanternOffset_ = {0.0f, 3.0f, -6.0f};
+
+	// 点光源1：月のポイントライト
+	bool pointLight1Active_ = true;
+	KamataEngine::Vector3 pointLight1Color_ = {0.60f, 0.75f, 1.0f};
+	float pointLight1Intensity_ = 6.0f;
+	float pointLight1Radius_ = 35.0f;
+	float pointLight1Decay_ = 1.5f;
+	float pointLight1ZOffset_ = -5.0f;
+	static KamataEngine::Vector3 moonOffset_;
 };

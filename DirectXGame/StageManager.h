@@ -30,9 +30,9 @@ private:
 		KamataEngine::Model* model = nullptr;
 		// モデル(ローカル)の境界ボックス
 		float minX = 0, maxX = 0, minY = 0, maxY = 0, minZ = 0, maxZ = 0;
-		// 上面の高さプロファイル（minYから kProfileStep ごと。足場が無い所は NaN）
+		// 上面の高さプロファイル（minXから kProfileStep ごと。足場が無い所は NaN）
 		std::vector<float> top;
-		// 手前端(minY)の上面の高さ(Z)
+		// 端の上面の高さ(Z)
 		float frontTop = 0;
 	};
 	struct Stage {

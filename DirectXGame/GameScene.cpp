@@ -96,6 +96,9 @@ void GameScene::Initialize() {
 	stage_->Initialize({modelGalaxy_[0], modelGalaxy_[1], modelGalaxy_[2]});
 	player_->SetStage(stage_);
 
+	// ★ プレイヤーに自動ロックオン用の敵リストを設定
+	player_->SetEnemies(&enemies_);
+
 	// 背景（板4枚の箱＋星＋月）
 	modelFrame_ = Model::CreateFromOBJ("PictureFrame");
 	modelStar_ = Model::CreateFromOBJ("star2");
@@ -171,7 +174,7 @@ void GameScene::Update() {
 	player_->Update();
 
 	lighting_->Update(player_->GetWorldPosition());
-	background_->Update(player_->GetWorldPosition());
+	background_->Update(player_->GetWorldPosition(), lighting_->GetLightGroup());
 
 	// 撃破・離脱した敵を削除
 	enemies_.remove_if([](Enemy* enemy) {
@@ -252,6 +255,6 @@ void GameScene::Draw() {
 
 	Model::PostDraw();
 
-	// GPUパーティクル（雨）。独自パイプラインなので Model::PostDraw の後で描く
+	// GPUパーティクル（雨）
 	rain_->Draw(camera_, player_->GetWorldPosition());
 }

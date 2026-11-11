@@ -61,10 +61,13 @@ float4 main(VSOutput input, bool isFront : SV_IsFrontFace) : SV_TARGET
             float NdotL = dot(direction, input.normal);
 			// ハーフベクトル
             float3 halfVector = normalize(direction + viewDir);
-			// 距離減衰
-            float factor = pow(saturate(1.0f - distance / pointLights[i].radius), pointLights[i].decay);
-			// 拡散反射光 (Wrap Lighting)
-            float3 diffuse = pow((NdotL + m_wrap) / (1.0f + m_wrap), 2) * m_diffuse;
+			
+			// 距離減衰（はっきり・くっきりとしたエッジを持つ減衰計算）
+            float normDist = saturate(distance / pointLights[i].radius);
+            float factor = pow(1.0f - normDist * normDist, pointLights[i].decay);
+
+			// 拡散反射光 (はっきりとしたLambert拡散光)
+            float3 diffuse = saturate(NdotL) * m_diffuse;
 			// 鏡面反射光 (Blinn-Phong)
             float3 specular = pow(saturate(dot(input.normal, halfVector)), shininess) * m_specular;
 

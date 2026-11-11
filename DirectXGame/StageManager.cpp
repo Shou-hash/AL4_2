@@ -42,9 +42,9 @@ void StageManager::Initialize(const std::vector<Model*>& models) {
 	counter_ = 0;
 }
 
-// 三角形を正面から見た(YZ平面の)輪郭から、y ごとの最も高いZ点を求める
+// 三角形を正面から見た輪郭から、進行方向(ローカルX軸)ごとの最も高いZ点を求める
 void StageManager::BuildProfile(ModelInfo& info) {
-	const int n = static_cast<int>((info.maxY - info.minY) / kProfileStep) + 2;
+	const int n = static_cast<int>((info.maxX - info.minX) / kProfileStep) + 2;
 	info.top.assign(n, -FLT_MAX);
 
 	for (const auto& mesh : info.model->GetMeshes()) {
@@ -52,19 +52,19 @@ void StageManager::BuildProfile(ModelInfo& info) {
 		const auto& idx = mesh->GetIndices();
 		for (size_t t = 0; t + 2 < idx.size(); t += 3) {
 			const Vector3 p[3] = {vtx[idx[t]].pos, vtx[idx[t + 1]].pos, vtx[idx[t + 2]].pos};
-			float ymin = (std::min)({p[0].y, p[1].y, p[2].y});
-			float ymax = (std::max)({p[0].y, p[1].y, p[2].y});
-			int i0 = (std::max)(0, static_cast<int>(std::ceil((ymin - info.minY) / kProfileStep)));
-			int i1 = (std::min)(n - 1, static_cast<int>(std::floor((ymax - info.minY) / kProfileStep)));
+			float xmin = (std::min)({p[0].x, p[1].x, p[2].x});
+			float xmax = (std::max)({p[0].x, p[1].x, p[2].x});
+			int i0 = (std::max)(0, static_cast<int>(std::ceil((xmin - info.minX) / kProfileStep)));
+			int i1 = (std::min)(n - 1, static_cast<int>(std::floor((xmax - info.minX) / kProfileStep)));
 			for (int i = i0; i <= i1; ++i) {
-				float y = info.minY + i * kProfileStep;
+				float x = info.minX + i * kProfileStep;
 				for (int e = 0; e < 3; ++e) {
 					const Vector3& a = p[e];
 					const Vector3& b = p[(e + 1) % 3];
-					if ((a.y - y) * (b.y - y) > 0.0f || a.y == b.y) {
+					if ((a.x - x) * (b.x - x) > 0.0f || a.x == b.x) {
 						continue;
 					}
-					float s = (y - a.y) / (b.y - a.y);
+					float s = (x - a.x) / (b.x - a.x);
 					info.top[i] = (std::max)(info.top[i], a.z + (b.z - a.z) * s);
 				}
 			}
@@ -98,15 +98,16 @@ void StageManager::Place(Stage& stage) {
 	const float s = kStageScale;
 
 	stage.minY = cursor_;
-	stage.maxY = cursor_ + (m.maxY - m.minY) * s;
+	// Z軸90度回転によりローカルX軸の幅(maxX - minX)がワールドY軸方向の長さになる
+	stage.maxY = cursor_ + (m.maxX - m.minX) * s;
 
 	WorldTransform& wt = stage.worldTransform;
 	wt.scale_ = {s, s, s};
-	// ★ モデルの表裏を反転させるためY軸に180度(π)回転を設定
-	wt.rotation_ = {0.0f, 3.14159265f, 0.0f};
+	// ★ モデルの表裏を反転(Y軸180度)＋Z軸90度(1.5707963f)回転を設定
+	wt.rotation_ = {0.0f, 3.14159265f, 1.5707963f};
 
 	// 手前端をcursor_に、上面をkGroundZに、横幅(X)の中心をX=0に合わせる
-	wt.translation_ = {-(m.minX + m.maxX) * 0.5f * s, stage.minY - m.minY * s, kGroundZ - m.frontTop * s};
+	wt.translation_ = {(m.minY + m.maxY) * 0.5f * s, stage.minY + m.maxX * s, kGroundZ + m.frontTop * s};
 
 	// ★ MakeAffineMatrix で回転を含めて行列を生成
 	wt.matWorld_ = MakeAffineMatrix(wt.scale_, wt.rotation_, wt.translation_);
@@ -133,7 +134,9 @@ bool StageManager::TryGetGroundZ(float y, float& outZ) const {
 		}
 		const ModelInfo& m = infos_[stage->modelIndex];
 		const int n = static_cast<int>(m.top.size());
-		float f = (y - stage->minY) / (kStageScale * kProfileStep);
+		// ワールドY座標から対応するローカルXインデックスを算出
+		float localX = m.maxX - (y - stage->minY) / kStageScale;
+		float f = (localX - m.minX) / kProfileStep;
 		int i = (std::min)((std::max)(static_cast<int>(f), 0), n - 2);
 		float t = (std::min)((std::max)(f - i, 0.0f), 1.0f);
 		float a = m.top[i];
@@ -141,7 +144,7 @@ bool StageManager::TryGetGroundZ(float y, float& outZ) const {
 		if (std::isnan(a) || std::isnan(b)) {
 			return false; // 足場の穴
 		}
-		outZ = stage->worldTransform.translation_.z + (a + (b - a) * t) * kStageScale;
+		outZ = stage->worldTransform.translation_.z - (a + (b - a) * t) * kStageScale;
 		return true;
 	}
 	return false;
@@ -158,5 +161,5 @@ Vector3 StageManager::GetRespawnPosition(float y) const {
 	float ry = target->minY + 3.0f;
 	float ground = kGroundZ;
 	TryGetGroundZ(ry, ground);
-	return {0.0f, ry, ground + kPlayerHalfHeight};
+	return {0.0f, ry, ground - kPlayerHalfHeight};
 }

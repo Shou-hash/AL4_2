@@ -30,7 +30,7 @@ Bounds CalcBounds(Model* model) {
 				first = false;
 			} else {
 				b.minX = (std::min)(b.minX, v.pos.x);
-				b.maxX = (std::max)(b.maxX, v.pos.x);
+				b.maxX = (std::max)(b.maxX, v.pos.y);
 				b.minY = (std::min)(b.minY, v.pos.y);
 				b.maxY = (std::max)(b.maxY, v.pos.y);
 				b.minZ = (std::min)(b.minZ, v.pos.z);
@@ -61,11 +61,6 @@ void BackgroundBox::Initialize(Model* frameModel, Model* starModel, Model* moonM
 	const float hz = B * 0.5f;
 
 	// 板：{内向き法線, 回転, スケール, 箱の中心から板の面までのオフセット}
-	// 回転は単軸のみ（回転順に依存しない）。ローカル+Zが内向き法線になるよう回す:
-	//   奥    : Y軸 π     → 法線 -Z
-	//   上    : X軸 +π/2  → 法線 -Y
-	//   下    : X軸 -π/2  → 法線 +Y
-	//   左    : Y軸 +π/2  → 法線 +X （板の長辺がZ方向になるのでXスケールを B/A に縮める）
 	struct PlateDef {
 		Vector3 normal;
 		Vector3 rotation;
@@ -73,10 +68,10 @@ void BackgroundBox::Initialize(Model* frameModel, Model* starModel, Model* moonM
 		Vector3 face; // 箱の中心から、板の面(内側)への位置
 	};
 	const PlateDef defs[4] = {
-	    {{0, 0, -1}, {0, kPi, 0}, {s, s, s}, {0, 0, hz}},
-	    {{0, -1, 0}, {kPi * 0.5f, 0, 0}, {s, s, s}, {0, hy, 0}},
-	    {{0, 1, 0}, {-kPi * 0.5f, 0, 0}, {s, s, s}, {0, -hy, 0}},
-	    {{1, 0, 0}, {0, kPi * 0.5f, 0}, {s * B / A, s, s}, {-hx, 0, 0}},
+	    {{0, 0, -1}, {0, kPi, 0},         {s, s, s},         {0, 0, hz} },
+	    {{0, -1, 0}, {kPi * 0.5f, 0, 0},  {s, s, s},         {0, hy, 0} },
+	    {{0, 1, 0},  {-kPi * 0.5f, 0, 0}, {s, s, s},         {0, -hy, 0}},
+	    {{1, 0, 0},  {0, kPi * 0.5f, 0},  {s * B / A, s, s}, {-hx, 0, 0}},
 	};
 
 	for (const PlateDef& d : defs) {
@@ -84,7 +79,7 @@ void BackgroundBox::Initialize(Model* frameModel, Model* starModel, Model* moonM
 		plate->worldTransform.Initialize();
 		plate->scale = d.scale;
 		plate->rotation = d.rotation;
-		// 正面(ローカル+Z)が面に来るよう、法線の反対側へ frontZ だけ下げる
+		plate->forward = d.normal; // 内向き法線方向をモデルの正面方向とする
 		const float back = frontZ * d.scale.z / s;
 		plate->offset = {d.face.x - d.normal.x * back, d.face.y - d.normal.y * back, d.face.z - d.normal.z * back};
 		plates_.push_back(std::move(plate));
@@ -95,11 +90,11 @@ void BackgroundBox::Initialize(Model* frameModel, Model* starModel, Model* moonM
 			star->worldTransform.Initialize();
 			float k = RandRange(kStarScaleMin, kStarScaleMax);
 			star->scale = {k, k, k};
-			star->rotation = d.rotation; // 板と同じ方向を向く
+			star->rotation = d.rotation;
+			star->forward = d.normal; // 星モデルが向いている正面方向
 			float u = RandRange(-0.95f, 0.95f);
 			float v = RandRange(-0.95f, 0.95f);
 			float depth = RandRange(1.0f, 4.0f); // 板からの距離(内側)
-			// 板の面上の位置(u,v) + 内向き法線 * depth
 			Vector3 p = d.face;
 			if (d.normal.z != 0.0f) { // 奥の板：XY平面
 				p.x = u * hx;
@@ -116,10 +111,11 @@ void BackgroundBox::Initialize(Model* frameModel, Model* starModel, Model* moonM
 		}
 	}
 
-	// 月
+	// 月：X軸に 90度 (kPi * 0.5f) 回転を加えて縦に立たせる
 	moon_.worldTransform.Initialize();
 	moon_.scale = {kMoonScale, kMoonScale, kMoonScale};
-	moon_.rotation = {0.0f, kPi, 0.0f}; // カメラ(-Z側)へ正面(+Z)を向ける
+	moon_.rotation = {kPi * 0.5f, kPi, 0.0f};
+	moon_.forward = {0.0f, 0.0f, -1.0f};
 }
 
 void BackgroundBox::UpdatePart(Part& part, const Vector3& base) {
@@ -131,7 +127,7 @@ void BackgroundBox::UpdatePart(Part& part, const Vector3& base) {
 	wt.TransferMatrix();
 }
 
-void BackgroundBox::Update(const Vector3& playerPos) {
+void BackgroundBox::Update(const Vector3& playerPos, LightGroup* lightGroup) {
 	// 箱の中心：Xはプレイヤーに追従、Yはゆるやかに追従
 	if (firstUpdate_) {
 		centerY_ = playerPos.y;
@@ -147,9 +143,31 @@ void BackgroundBox::Update(const Vector3& playerPos) {
 		UpdatePart(*star, center);
 	}
 
-	// 月：ライトの位置と同じ場所（左・上・奥）
+	// 月：ライトの位置と同じ場所（左・上・空）
 	moon_.offset = {0, 0, 0};
 	UpdatePart(moon_, LightingManager::GetMoonPosition(playerPos));
+
+	// ライトグループが渡されている場合、各星に1つずつオレンジ色のポイントライトを設定
+	if (lightGroup) {
+		// ランタン(0)・月(1)の次からポイントライトを割り当てる (インデックス 2 以降)
+		int lightIndex = 2;
+		for (size_t i = 0; i < stars_.size() && lightIndex < LightGroup::kPointLightNum; ++i, ++lightIndex) {
+			const auto& star = stars_[i];
+			const Vector3 starPos = star->worldTransform.translation_;
+
+			// 星のモデルが向いている方向（forward）へ手前に移動した座標を計算
+			float offsetDistance = kStarFrontOffset * star->scale.x;
+			Vector3 lightPos = {starPos.x + star->forward.x * offsetDistance, starPos.y + star->forward.y * offsetDistance, starPos.z + star->forward.z * offsetDistance};
+
+			// ポイントライトの設定（オレンジ色・星のスケールに合わせた可変範囲）
+			lightGroup->SetPointLightActive(lightIndex, true);
+			lightGroup->SetPointLightColor(lightIndex, starLightColor_);
+			lightGroup->SetPointLightIntensity(lightIndex, kStarLightIntensity);
+			lightGroup->SetPointLightRadius(lightIndex, 10.0f * star->scale.x);
+			lightGroup->SetPointLightDecay(lightIndex, 1.5f);
+			lightGroup->SetPointLightPos(lightIndex, lightPos);
+		}
+	}
 }
 
 void BackgroundBox::Draw(const Camera& camera) {

@@ -6,6 +6,8 @@
 #include <list>
 
 class StageManager;
+class Enemy;       // ★ 前方宣言
+class EnemyBullet; // ★ 前方宣言
 
 /// <summary>
 /// プレイヤークラス（Colliderを継承）
@@ -34,6 +36,9 @@ public:
 	// 足場(ステージ)の設定。自動前進・ジャンプ・着地の判定に使う
 	void SetStage(const StageManager* stage) { stage_ = stage; }
 
+	// ★ 敵リストの設定（自動照準用）
+	void SetEnemies(const std::list<Enemy*>* enemies) { enemies_ = enemies; }
+
 private:
 	/// <summary>
 	/// 攻撃
@@ -52,6 +57,9 @@ private:
 	std::list<PlayerBullet*> bullets_;
 
 	const StageManager* stage_ = nullptr;
+
+	// ★ 敵リストへの参照（所有権なし）
+	const std::list<Enemy*>* enemies_ = nullptr;
 
 	// ★ 縦方向（Z軸）の速度とジャンプ状態
 	float velocityZ_ = 0.0f;
