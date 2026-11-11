@@ -69,8 +69,8 @@ void EnemyBullet::Initialize(Model* model, const Vector3& position, const Vector
 	velocity_ = velocity;
 
 	worldTransform_.scale_.x = 0.5f;
-	worldTransform_.scale_.y = 0.5f;
-	worldTransform_.scale_.z = 3.0f;
+	worldTransform_.scale_.y = 3.0f;
+	worldTransform_.scale_.z = 0.5f;
 
 	// ★ 当たり判定の半径を設定
 	SetRadius(0.5f);
@@ -107,43 +107,15 @@ void EnemyBullet::Update() {
 	// 座標移動
 	worldTransform_.translation_ += velocity_;
 
-	// 進行方向に合わせた見た目の回転制御
-	worldTransform_.rotation_.y = std::atan2(velocity_.x, velocity_.z);
-	float velocityXZ = std::sqrt(velocity_.x * velocity_.x + velocity_.z * velocity_.z);
-	worldTransform_.rotation_.x = std::atan2(-velocity_.y, velocityXZ);
+	// 進行方向に合わせた見た目の回転制御（XY平面: 細長い方向=Y軸を進行方向へ向ける）
+	worldTransform_.rotation_.z = std::atan2(-velocity_.x, velocity_.y);
 
-	// ワールド行列の再計算
-	float sx = worldTransform_.scale_.x;
-	float sy = worldTransform_.scale_.y;
-	float sz = worldTransform_.scale_.z;
+	float c = std::cos(worldTransform_.rotation_.z);
+	float s = std::sin(worldTransform_.rotation_.z);
+	const Vector3& sc = worldTransform_.scale_;
 
-	float rx = worldTransform_.rotation_.x;
-	float ry = worldTransform_.rotation_.y;
-
-	float cx = std::cos(rx);
-	float sx_rad = std::sin(rx);
-	float cy = std::cos(ry);
-	float sy_rad = std::sin(ry);
-
-	worldTransform_.matWorld_.m[0][0] = sx * cy;
-	worldTransform_.matWorld_.m[0][1] = 0.0f;
-	worldTransform_.matWorld_.m[0][2] = -sx * sy_rad;
-	worldTransform_.matWorld_.m[0][3] = 0.0f;
-
-	worldTransform_.matWorld_.m[1][0] = sy * (sx_rad * sy_rad);
-	worldTransform_.matWorld_.m[1][1] = sy * cx;
-	worldTransform_.matWorld_.m[1][2] = sy * (sx_rad * cy);
-	worldTransform_.matWorld_.m[1][3] = 0.0f;
-
-	worldTransform_.matWorld_.m[2][0] = sz * (cx * sy_rad);
-	worldTransform_.matWorld_.m[2][1] = sz * (-sx_rad);
-	worldTransform_.matWorld_.m[2][2] = sz * (cx * cy);
-	worldTransform_.matWorld_.m[2][3] = 0.0f;
-
-	worldTransform_.matWorld_.m[3][0] = worldTransform_.translation_.x;
-	worldTransform_.matWorld_.m[3][1] = worldTransform_.translation_.y;
-	worldTransform_.matWorld_.m[3][2] = worldTransform_.translation_.z;
-	worldTransform_.matWorld_.m[3][3] = 1.0f;
+	worldTransform_.matWorld_ = {
+	    sc.x * c, sc.x * s, 0.0f, 0.0f, sc.y * -s, sc.y * c, 0.0f, 0.0f, 0.0f, 0.0f, sc.z, 0.0f, worldTransform_.translation_.x, worldTransform_.translation_.y, worldTransform_.translation_.z, 1.0f};
 
 	worldTransform_.TransferMatrix();
 }
@@ -153,14 +125,6 @@ void EnemyBullet::OnCollision() {
 	isDead_ = true;
 }
 
-KamataEngine::Vector3 EnemyBullet::GetWorldPosition() const 
-{ 
-	return {worldTransform_.matWorld_.m[3][0], 
-		worldTransform_.matWorld_.m[3][1],
-		worldTransform_.matWorld_.m[3][2]}; 
-}
+KamataEngine::Vector3 EnemyBullet::GetWorldPosition() const { return {worldTransform_.matWorld_.m[3][0], worldTransform_.matWorld_.m[3][1], worldTransform_.matWorld_.m[3][2]}; }
 
-void EnemyBullet::Draw(const Camera& camera) 
-{
-	model_->Draw(worldTransform_, camera, textureHandle_); 
-}
+void EnemyBullet::Draw(const Camera& camera) { model_->Draw(worldTransform_, camera, textureHandle_); }

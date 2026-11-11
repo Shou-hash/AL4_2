@@ -1,12 +1,17 @@
 #pragma once
 #include "3d/DebugCamera.h"
+#include "BackgroundBox.h"
+#include "CameraController.h" // RailCameraController.h を置き換え
 #include "Collider.h"
 #include "CollisionManager.h"
 #include "Enemy.h"
 #include "KamataEngine.h"
+#include "LightingManager.h"
+#include "ParticleSystem.h"
 #include "Player.h"
-#include "RailCameraController.h"
 #include "Skydome.h"
+#include "StageManager.h"
+#include <list>
 
 class GameScene {
 public:
@@ -33,7 +38,10 @@ private:
 	void CheckCollisionPair(Collider* colliderA, Collider* colliderB);
 
 private:
-	Enemy* enemy_ = nullptr;
+	// 敵（全方位から次々出現する）
+	std::list<Enemy*> enemies_;
+	int32_t spawnTimer_ = 0;
+	static inline const int32_t kSpawnInterval = 120;
 	KamataEngine::Model* enemyModel_ = nullptr;
 	uint32_t enemyTextureHandle_ = 0;
 
@@ -57,5 +65,16 @@ private:
 	KamataEngine::Model* modelSkydome_ = nullptr;
 
 	// レールカメラ
-	RailCameraController* railCamera_ = nullptr;
+	CameraController* cameraController_ = nullptr;
+
+	// ライティング / ステージ / 背景 / GPUパーティクル
+	LightingManager* lighting_ = nullptr;
+	StageManager* stage_ = nullptr;
+	BackgroundBox* background_ = nullptr;
+	ParticleSystem* rain_ = nullptr;
+	KamataEngine::Model* modelGalaxy_[3] = {};
+	KamataEngine::Model* modelFrame_ = nullptr;
+	KamataEngine::Model* modelStar_ = nullptr;
+	KamataEngine::Model* modelMoon_ = nullptr;
+	KamataEngine::Model* modelParticle_ = nullptr;
 };

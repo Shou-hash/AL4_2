@@ -1,5 +1,7 @@
 #include "Player.h"
 #include "CollisionConfig.h" // ★ 衝突設定のインクルードを追加
+#include "Matrix4x4.h"
+#include "StageManager.h"
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -27,6 +29,9 @@ void Player::Initialize(KamataEngine::Model* model, uint32_t textureHandle) {
 	worldTransform_.Initialize();
 	input_ = Input::GetInstance();
 
+	// 開始位置：空中から落ちて最初の足場に着地する
+	worldTransform_.translation_ = {0.0f, 0.0f, 10.0f};
+
 	// ★ 当たり判定の半径を設定
 	SetRadius(1.0f);
 
@@ -48,59 +53,63 @@ void Player::Update() {
 	// キャラクター旋回処理
 	const float kRotSpeed = 0.02f;
 	if (input_->PushKey(DIK_A)) {
-		worldTransform_.rotation_.y += kRotSpeed;
+		worldTransform_.rotation_.z += kRotSpeed;
 	} else if (input_->PushKey(DIK_D)) {
-		worldTransform_.rotation_.y -= kRotSpeed;
+		worldTransform_.rotation_.z -= kRotSpeed;
 	}
 
-	// キャラクター移動処理
-	Vector3 move = {0, 0, 0};
-	const float kCharacterSpeed = 0.2f;
+	// ---- 自動前進＋ジャンプ（足場の上を走る）----
+	const float kRunSpeed = 0.25f;     // 自動前進(+Y)の速さ
+	const float kJumpPower = 0.45f;    // ジャンプの初速(Z軸)
+	const float kGravity = 0.02f;      // 重力(Z軸)
+	const float kStepTolerance = 1.0f; // 地形に沿って登れる/降りられる段差
+	const float kFallLimitZ = -30.0f;  // これより下に落ちたら復帰
 
-	if (input_->PushKey(DIK_LEFT)) {
-		move.x -= kCharacterSpeed;
-	} else if (input_->PushKey(DIK_RIGHT)) {
-		move.x += kCharacterSpeed;
+	worldTransform_.translation_.y += kRunSpeed;
+
+	// 足元の地面の高さ(Z座標)
+	float groundZ = 0.0f;
+	bool hasGround = stage_ && stage_->TryGetGroundZ(worldTransform_.translation_.y, groundZ);
+	float standZ = groundZ + StageManager::kPlayerHalfHeight;
+	float prevZ = worldTransform_.translation_.z;
+
+	if (onGround_) {
+		if (hasGround && std::fabs(standZ - prevZ) <= kStepTolerance) {
+			// 地形に沿って走る
+			worldTransform_.translation_.z = standZ;
+			velocityZ_ = 0.0f;
+			// ジャンプ（↑キー）
+			if (input_->TriggerKey(DIK_UP)) {
+				velocityZ_ = kJumpPower;
+				onGround_ = false;
+			}
+		} else {
+			// 足場の端を越えた/段差が大きい → 落下開始
+			onGround_ = false;
+		}
 	}
 
-	if (input_->PushKey(DIK_UP)) {
-		move.y += kCharacterSpeed;
-	} else if (input_->PushKey(DIK_DOWN)) {
-		move.y -= kCharacterSpeed;
+	if (!onGround_) {
+		velocityZ_ -= kGravity;
+		worldTransform_.translation_.z += velocityZ_;
+
+		// 着地：落下中に地面を越えたら着地（少しの食い込みは許容）
+		if (hasGround && velocityZ_ <= 0.0f && prevZ >= standZ - kStepTolerance && worldTransform_.translation_.z <= standZ) {
+			worldTransform_.translation_.z = standZ;
+			velocityZ_ = 0.0f;
+			onGround_ = true;
+		}
 	}
 
-	worldTransform_.translation_.x += move.x;
-	worldTransform_.translation_.y += move.y;
-	worldTransform_.translation_.z += move.z;
-
-	// 移動限界値の設定
-	const float kMoveLimitX = 34.0f;
-	const float kMoveLimitY = 18.0f;
-	worldTransform_.translation_.x = std::clamp(worldTransform_.translation_.x, -kMoveLimitX, kMoveLimitX);
-	worldTransform_.translation_.y = std::clamp(worldTransform_.translation_.y, -kMoveLimitY, kMoveLimitY);
+	// 隙間に落ちたら、直前の足場の先頭へ戻る
+	if (stage_ && worldTransform_.translation_.z < kFallLimitZ) {
+		worldTransform_.translation_ = stage_->GetRespawnPosition(worldTransform_.translation_.y);
+		velocityZ_ = 0.0f;
+		onGround_ = false;
+	}
 
 	// 行列の再計算
-	float cosY = std::cos(worldTransform_.rotation_.y);
-	float sinY = std::sin(worldTransform_.rotation_.y);
-
-	worldTransform_.matWorld_ = {
-	    worldTransform_.scale_.x * cosY,
-	    0.0f,
-	    worldTransform_.scale_.x * -sinY,
-	    0.0f,
-	    0.0f,
-	    worldTransform_.scale_.y,
-	    0.0f,
-	    0.0f,
-	    worldTransform_.scale_.z * sinY,
-	    0.0f,
-	    worldTransform_.scale_.z * cosY,
-	    0.0f,
-	    worldTransform_.translation_.x,
-	    worldTransform_.translation_.y,
-	    worldTransform_.translation_.z,
-	    1.0f};
-
+	worldTransform_.matWorld_ = MakeAffineMatrix(worldTransform_.scale_, worldTransform_.rotation_, worldTransform_.translation_);
 	worldTransform_.TransferMatrix();
 
 	// 攻撃処理
@@ -121,7 +130,7 @@ void Player::Attack() {
 	if (input_->TriggerKey(DIK_SPACE)) {
 		// 弾の速度
 		const float kBulletSpeed = 1.0f;
-		Vector3 velocity(0.0f, 0.0f, kBulletSpeed);
+		Vector3 velocity(0.0f, kBulletSpeed, 0.0f); // 自機の正面は+Y
 
 		// 速度ベクトルを自機の向きに合わせて回転させる
 		velocity = TransformNormal(velocity, worldTransform_.matWorld_);

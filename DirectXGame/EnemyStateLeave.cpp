@@ -1,10 +1,9 @@
 #include "EnemyStateLeave.h"
 #include "Enemy.h"
 
-EnemyStateLeave::EnemyStateLeave(Enemy* enemy) : BaseEnemyState("State Leave", enemy) 
-{
+EnemyStateLeave::EnemyStateLeave(Enemy* enemy, const KamataEngine::Vector3& velocity) : BaseEnemyState("State Leave", enemy), velocity_(velocity) {
 	if (enemy_) {
-		// 離脱フェーズに入ったらタイマー（自動発射）を停止・クリアする！
+		// 離脱フェーズに入ったらタイマー（自動発射）を停止・クリアする
 		enemy_->ClearTimedCalls();
 	}
 }
@@ -16,12 +15,9 @@ void EnemyStateLeave::Update() {
 		return;
 	}
 
-	// Enemy から WorldTransform を取得
+	// 接近時の向きのまま通り抜ける
 	KamataEngine::WorldTransform& transform = enemy_->GetWorldTransform();
-
-	// 離脱（斜め上奥へ進む）
-	KamataEngine::Vector3 leaveVelocity = {-0.0f, 0.0f, -0.2f};
-	transform.translation_.x += leaveVelocity.x;
-	transform.translation_.y += leaveVelocity.y;
-	transform.translation_.z += leaveVelocity.z;
+	transform.translation_.x += velocity_.x;
+	transform.translation_.y += velocity_.y;
+	transform.translation_.z += velocity_.z;
 }

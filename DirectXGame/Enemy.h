@@ -21,7 +21,7 @@ public:
 
 	~Enemy();
 
-	void Initialize(KamataEngine::Model* model, uint32_t textureHandle, Player* player);
+	void Initialize(KamataEngine::Model* model, uint32_t textureHandle, Player* player, const KamataEngine::Vector3& position);
 	void Update();
 	void Draw(const KamataEngine::Camera& camera);
 	void ChangeState(BaseEnemyState* newState);
@@ -33,6 +33,10 @@ public:
 
 	// Player の Setter
 	void SetPlayer(Player* player) { player_ = player; }
+	Player* GetPlayer() const { return player_; }
+
+	// デスフラグ（撃破された/画面外へ離脱した）
+	bool IsDead() const { return isDead_; }
 
 	// ★ Colliderの関数をオーバーライド
 	void OnCollision() override;
@@ -51,6 +55,8 @@ private:
 
 	// 自機キャラのポインタ（所有権は持たない）
 	Player* player_ = nullptr;
+
+	bool isDead_ = false;
 
 	std::list<EnemyBullet*> bullets_;
 	std::list<TimedCall*> timedCalls_;

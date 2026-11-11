@@ -1,7 +1,8 @@
 #include "EnemyStateApproach.h"
 #include "Enemy.h"
 #include "EnemyStateLeave.h"
-#include <cmath> // std::sin, std::cos を使用
+#include "Player.h"
+#include <cmath>
 
 // コンストラクタ
 EnemyStateApproach::EnemyStateApproach(Enemy* enemy) : BaseEnemyState("State Approach", enemy) {}
@@ -13,28 +14,24 @@ void EnemyStateApproach::Update() {
 		return;
 	}
 
-	// 経過フレームを加算
-	frameCount_++;
-
-	// Enemy から WorldTransform を取得
 	KamataEngine::WorldTransform& transform = enemy_->GetWorldTransform();
+	KamataEngine::Vector3 playerPos = enemy_->GetPlayer()->GetWorldPosition();
 
-	// Z軸方向：手前へ進行（一定速度）
-	const float kForwardSpeed = -0.1f;
-	transform.translation_.z += kForwardSpeed;
+	// 自機へ向かうXY平面上の方向
+	float dx = playerPos.x - transform.translation_.x;
+	float dy = playerPos.y - transform.translation_.y;
+	float dist = std::sqrt(dx * dx + dy * dy);
 
-	//// X軸方向：正弦波（Sin）で大きく左右に旋回
-	//const float kWaveSpeedX = 0.05f; // 横揺れの速さ（周期）
-	//const float kAmplitudeX = 0.25f; // 横揺れの振り幅
-	//transform.translation_.x += std::sin(frameCount_ * kWaveSpeedX) * kAmplitudeX;
-
-	//// Y軸方向：余弦波（Cos）で上下にも少し揺らして立体感を出す
-	//const float kWaveSpeedY = 0.025f; // 縦揺れの速さ
-	//const float kAmplitudeY = 0.08f;  // 縦揺れの振り幅
-	//transform.translation_.y += std::cos(frameCount_ * kWaveSpeedY) * kAmplitudeY;
-
-	// z < 0.0f に達したら「離脱ステート」へ遷移！
-	if (transform.translation_.z < 0.0f) {
-		enemy_->ChangeState(new EnemyStateLeave(enemy_));
+	// 近づいたら、その向きのまま通り抜ける「離脱ステート」へ
+	const float kLeaveDistance = 10.0f;
+	if (dist < kLeaveDistance) {
+		const float kLeaveSpeed = 0.2f;
+		KamataEngine::Vector3 velocity = {dx / dist * kLeaveSpeed, dy / dist * kLeaveSpeed, 0.0f};
+		enemy_->ChangeState(new EnemyStateLeave(enemy_, velocity)); // this は破棄されるので以降触らない
+		return;
 	}
+
+	const float kSpeed = 0.1f;
+	transform.translation_.x += dx / dist * kSpeed;
+	transform.translation_.y += dy / dist * kSpeed;
 }

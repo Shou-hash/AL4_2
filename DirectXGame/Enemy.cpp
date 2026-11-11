@@ -18,7 +18,7 @@ Enemy::~Enemy() {
 }
 
 // Initialize 関数の実装（Playerを受け取るように変更）
-void Enemy::Initialize(Model* model, uint32_t textureHandle, Player* player) {
+void Enemy::Initialize(Model* model, uint32_t textureHandle, Player* player, const Vector3& position) {
 	assert(model);
 	assert(player);
 	model_ = model;
@@ -26,7 +26,7 @@ void Enemy::Initialize(Model* model, uint32_t textureHandle, Player* player) {
 	player_ = player;
 
 	worldTransform_.Initialize();
-	worldTransform_.translation_ = {20.0f, 0.0f, 30.0f};
+	worldTransform_.translation_ = position;
 
 	// ★ 当たり判定の半径を設定
 	SetRadius(1.0f);
@@ -141,6 +141,17 @@ void Enemy::Update() {
 		state_->Update();
 	}
 
+	// 自機から遠く離れたら消す（離脱した敵の掃除）
+	{
+		const float kDespawnDistance = 50.0f;
+		Vector3 pp = player_->GetWorldPosition();
+		float dx = worldTransform_.translation_.x - pp.x;
+		float dy = worldTransform_.translation_.y - pp.y;
+		if (dx * dx + dy * dy > kDespawnDistance * kDespawnDistance) {
+			isDead_ = true;
+		}
+	}
+
 	// 行列更新
 	worldTransform_.matWorld_ = {
 	    worldTransform_.scale_.x,
@@ -168,7 +179,8 @@ void Enemy::Update() {
 }
 
 void Enemy::OnCollision() {
-	// 当たっても何もしない（資料の仕様通り）
+	// 当たったら撃破
+	isDead_ = true;
 }
 
 void Enemy::Draw(const Camera& camera) {

@@ -5,6 +5,8 @@
 #include "PlayerBullet.h"
 #include <list>
 
+class StageManager;
+
 /// <summary>
 /// プレイヤークラス（Colliderを継承）
 /// </summary>
@@ -29,6 +31,9 @@ public:
 	// 自弾リストを取得する getter（参照渡し）
 	const std::list<PlayerBullet*>& GetBullets() const { return bullets_; }
 
+	// 足場(ステージ)の設定。自動前進・ジャンプ・着地の判定に使う
+	void SetStage(const StageManager* stage) { stage_ = stage; }
+
 private:
 	/// <summary>
 	/// 攻撃
@@ -45,4 +50,10 @@ private:
 
 	// 弾のリスト（複数管理）
 	std::list<PlayerBullet*> bullets_;
+
+	const StageManager* stage_ = nullptr;
+
+	// ★ 縦方向（Z軸）の速度とジャンプ状態
+	float velocityZ_ = 0.0f;
+	bool onGround_ = false;
 };

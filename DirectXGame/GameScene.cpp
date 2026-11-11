@@ -1,5 +1,9 @@
 #include "GameScene.h"
 #include "3d/AxisIndicator.h"
+#include <cmath>
+#include <cstdlib>
+#include <ctime>
+#include <string>
 
 using namespace KamataEngine;
 
@@ -8,7 +12,9 @@ GameScene::~GameScene() {
 	delete player_;
 	delete debugCamera_;
 
-	delete enemy_;
+	for (Enemy* enemy : enemies_) {
+		delete enemy;
+	}
 	delete enemyModel_;
 
 	// ★ 衝突マネージャの解放を忘れずに実行
@@ -18,8 +24,20 @@ GameScene::~GameScene() {
 	delete skydome_;
 	delete modelSkydome_;
 
-	// レールカメラの解放
-	delete railCamera_;
+	// デストラクタ
+	delete cameraController_;
+
+	delete rain_;
+	delete background_;
+	delete stage_;
+	delete lighting_;
+	delete modelParticle_;
+	delete modelFrame_;
+	delete modelStar_;
+	delete modelMoon_;
+	for (Model* model : modelGalaxy_) {
+		delete model;
+	}
 }
 
 void GameScene::Initialize() {
@@ -27,9 +45,9 @@ void GameScene::Initialize() {
 	camera_.Initialize();
 
 	// 最初の通常の視角を上から見下ろす角度（X軸90度回転 = 1.57079f）に設定
-	camera_.rotation_ = {1.57079f, 0.0f, 0.0f};
+	camera_.rotation_ = {0.0f, 0.0f, 0.0f};
 	// 上から見下ろしたときに見えやすいよう初期位置の高さ(Y)と奥行き(Z)を少し調整
-	camera_.translation_ = {0.0f, 50.0f, -10.0f};
+	camera_.translation_ = {0.0f, 0.0f, -30.0f};
 
 	debugCamera_ = new KamataEngine::DebugCamera(WinApp::kWindowWidth, WinApp::kWindowHeight);
 
@@ -45,8 +63,7 @@ void GameScene::Initialize() {
 	enemyTextureHandle_ = TextureManager::Load("cube.jpg");
 	enemyModel_ = Model::Create();
 
-	enemy_ = new Enemy();
-	enemy_->Initialize(enemyModel_, enemyTextureHandle_, player_);
+	srand(static_cast<unsigned>(time(nullptr))); // スポーン角度用
 
 	// ★ 衝突マネージャの生成
 	collisionManager_ = new CollisionManager();
@@ -58,8 +75,40 @@ void GameScene::Initialize() {
 	skydome_->Initialize(modelSkydome_, &camera_);
 
 	// レールカメラの生成と初期化
-	railCamera_ = new RailCameraController();
-	railCamera_->Initialize({0.0f, 50.0f, -10.0f}, {1.57079f, 0.0f, 0.0f});
+	// Initialize の末尾(railCamera_ の生成部分を置き換え)
+	cameraController_ = new CameraController();
+	cameraController_->Initialize();
+	cameraController_->SetTarget(player_);
+	cameraController_->Reset();
+
+	// ライティング（夜）。天球以外の全モデルに適用（月は自ら光る見た目にするため適用しない）
+	lighting_ = new LightingManager();
+	lighting_->Initialize();
+	lighting_->Apply(model_);
+	lighting_->Apply(enemyModel_);
+
+	// ステージ（galaxy1〜3）。隙間を空けて並べ、プレイヤーが自動で走ってジャンプで越える
+	for (int i = 0; i < 3; ++i) {
+		modelGalaxy_[i] = Model::CreateFromOBJ("galaxy" + std::to_string(i + 1));
+		lighting_->Apply(modelGalaxy_[i]);
+	}
+	stage_ = new StageManager();
+	stage_->Initialize({modelGalaxy_[0], modelGalaxy_[1], modelGalaxy_[2]});
+	player_->SetStage(stage_);
+
+	// 背景（板4枚の箱＋星＋月）
+	modelFrame_ = Model::CreateFromOBJ("PictureFrame");
+	modelStar_ = Model::CreateFromOBJ("star2");
+	modelMoon_ = Model::CreateFromOBJ("moon");
+	lighting_->Apply(modelFrame_);
+	lighting_->Apply(modelStar_);
+	background_ = new BackgroundBox();
+	background_->Initialize(modelFrame_, modelStar_, modelMoon_);
+
+	// GPUパーティクル（雨）
+	modelParticle_ = Model::CreateFromOBJ("particle");
+	rain_ = new ParticleSystem();
+	rain_->Initialize(modelParticle_);
 }
 
 void GameScene::Update() {
@@ -70,7 +119,7 @@ void GameScene::Update() {
 #endif
 
 	// レールカメラの更新
-	railCamera_->Update();
+	cameraController_->Update(); // railCamera_->Update(); を置き換え
 
 	// マウスホイールによる遠近変更処理（ホイールの回転量を反映）
 	int32_t wheel = input_->GetWheel();
@@ -96,8 +145,8 @@ void GameScene::Update() {
 			debugCamera_->Update();
 
 			// Cキーを押した後のカメラの回転角を真上からの見下ろしに強制リセット
-			camera_.rotation_ = {1.57079f, 0.0f, 0.0f};
-			camera_.translation_ = {0.0f, 50.0f, -10.0f};
+			camera_.rotation_ = {0.0f, 0.0f, 0.0f};
+			camera_.translation_ = {0.0f, 0.0f, -30.0f};
 			camera_.UpdateMatrix();
 		} else {
 			// Cキーが押されていない通常時はデバッグカメラの行列をそのまま適用
@@ -107,18 +156,47 @@ void GameScene::Update() {
 		}
 	} else {
 		// レールカメラで計算したビュー行列とプロジェクション行列をコピーする
-		camera_.matView = railCamera_->GetCamera().matView;
-		camera_.matProjection = railCamera_->GetCamera().matProjection;
+		camera_.matView = cameraController_->GetCamera().matView;
+		camera_.matProjection = cameraController_->GetCamera().matProjection;
 		camera_.TransferMatrix();
 	}
 
 	// 天球の更新
+	skydome_->SetPosition({0.0f, player_->GetWorldPosition().y, 0.0f});
 	skydome_->Update();
+
+	// ステージの生成(先にやる：プレイヤーが足場を参照する)
+	stage_->Update(player_->GetWorldPosition().y);
 
 	player_->Update();
 
-	if (enemy_ != nullptr) {
-		enemy_->Update();
+	lighting_->Update(player_->GetWorldPosition());
+	background_->Update(player_->GetWorldPosition());
+
+	// 撃破・離脱した敵を削除
+	enemies_.remove_if([](Enemy* enemy) {
+		if (enemy->IsDead()) {
+			delete enemy;
+			return true;
+		}
+		return false;
+	});
+
+	// 全方位スポーン: 自機を中心とした円周上のランダムな角度に出現
+	if (--spawnTimer_ <= 0) {
+		spawnTimer_ = kSpawnInterval;
+		const float kSpawnRadius = 30.0f; // 画面外になる距離
+		float angle = static_cast<float>(rand()) / RAND_MAX * 6.2831853f;
+		Vector3 p = player_->GetWorldPosition();
+		Vector3 pos = {p.x + std::cos(angle) * kSpawnRadius, p.y + std::sin(angle) * kSpawnRadius, 0.0f};
+
+		Enemy* enemy = new Enemy();
+		enemy->Initialize(enemyModel_, enemyTextureHandle_, player_, pos);
+		enemies_.push_back(enemy);
+	}
+
+	for (Enemy* enemy : enemies_) {
+		enemy->Update();
 	}
 
 	// ----------------------------------------------------
@@ -139,13 +217,10 @@ void GameScene::Update() {
 		}
 	}
 
-	// 4. 敵キャラの登録 (ポインタが存在する場合)
-	if (enemy_ != nullptr) {
-		collisionManager_->AddCollider(enemy_);
-
-		// 5. 敵弾リストの登録
-		const std::list<EnemyBullet*>& enemyBullets = enemy_->GetBullets();
-		for (EnemyBullet* bullet : enemyBullets) {
+	// 4. 敵キャラと敵弾の登録
+	for (Enemy* enemy : enemies_) {
+		collisionManager_->AddCollider(enemy);
+		for (EnemyBullet* bullet : enemy->GetBullets()) {
 			if (!bullet->IsDead()) {
 				collisionManager_->AddCollider(bullet);
 			}
@@ -164,13 +239,19 @@ void GameScene::Draw() {
 	// 天球の描画
 	skydome_->Draw();
 
+	background_->Draw(camera_);
+	stage_->Draw(camera_);
+
 	player_->Draw(&camera_);
 
-	if (enemy_ != nullptr) {
-		enemy_->Draw(camera_);
+	for (Enemy* enemy : enemies_) {
+		enemy->Draw(camera_);
 	}
 
 	AxisIndicator::GetInstance()->Draw();
 
 	Model::PostDraw();
+
+	// GPUパーティクル（雨）。独自パイプラインなので Model::PostDraw の後で描く
+	rain_->Draw(camera_, player_->GetWorldPosition());
 }

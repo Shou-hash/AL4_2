@@ -163,19 +163,23 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="BackgroundBox.cpp" />
     <ClCompile Include="BaseEnemyState.cpp" />
+    <ClCompile Include="CameraController.cpp" />
     <ClCompile Include="CollisionManager.cpp" />
     <ClCompile Include="Enemy.cpp" />
     <ClCompile Include="EnemyBullet.cpp" />
     <ClCompile Include="EnemyStateApproach.cpp" />
     <ClCompile Include="EnemyStateLeave.cpp" />
     <ClCompile Include="GameScene.cpp" />
+    <ClCompile Include="LightingManager.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MyMath.cpp" />
+    <ClCompile Include="ParticleSystem.cpp" />
     <ClCompile Include="Player.cpp" />
     <ClCompile Include="PlayerBullet.cpp" />
-    <ClCompile Include="RailCameraController.cpp" />
     <ClCompile Include="Skydome.cpp" />
+    <ClCompile Include="StageManager.cpp" />
     <ClCompile Include="TimedCall.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -276,7 +280,9 @@
     <None Include="Resources\shaders\Sprite.hlsli" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="BackgroundBox.h" />
     <ClInclude Include="BaseEnemyState.h" />
+    <ClInclude Include="CameraController.h" />
     <ClInclude Include="Collider.h" />
     <ClInclude Include="CollisionConfig.h" />
     <ClInclude Include="CollisionManager.h" />
@@ -285,12 +291,14 @@
     <ClInclude Include="EnemyStateApproach.h" />
     <ClInclude Include="EnemyStateLeave.h" />
     <ClInclude Include="GameScene.h" />
+    <ClInclude Include="LightingManager.h" />
     <ClInclude Include="Matrix4x4.h" />
     <ClInclude Include="MyMath.h" />
+    <ClInclude Include="ParticleSystem.h" />
     <ClInclude Include="Player.h" />
     <ClInclude Include="PlayerBullet.h" />
-    <ClInclude Include="RailCameraController.h" />
     <ClInclude Include="Skydome.h" />
+    <ClInclude Include="StageManager.h" />
     <ClInclude Include="TimedCall.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
