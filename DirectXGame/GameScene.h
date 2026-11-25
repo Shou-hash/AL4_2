@@ -4,6 +4,7 @@
 #include "CameraController.h" // RailCameraController.h を置き換え
 #include "Collider.h"
 #include "CollisionManager.h"
+#include "EffectParticleSystem.h" // ★ 追加
 #include "Enemy.h"
 #include "KamataEngine.h"
 #include "LightingManager.h"
@@ -30,6 +31,9 @@ public:
 	/// 衝突判定と応答
 	/// </summary>
 	void CheckAllCollisions();
+
+	// ★ シーン終了フラグの取得
+	bool IsFinished() const { return isFinished_; }
 
 private:
 	/// <summary>
@@ -72,9 +76,16 @@ private:
 	StageManager* stage_ = nullptr;
 	BackgroundBox* background_ = nullptr;
 	ParticleSystem* rain_ = nullptr;
+	EffectParticleSystem* effectParticles_ = nullptr;
 	KamataEngine::Model* modelGalaxy_[3] = {};
 	KamataEngine::Model* modelFrame_ = nullptr;
 	KamataEngine::Model* modelStar_ = nullptr;
 	KamataEngine::Model* modelMoon_ = nullptr;
 	KamataEngine::Model* modelParticle_ = nullptr;
+
+	// ★ 追加: プレイヤーの着地検知用フラグ
+	bool wasPlayerOnGround_ = false;
+
+	// シーン終了フラグ
+	bool isFinished_ = false;
 };

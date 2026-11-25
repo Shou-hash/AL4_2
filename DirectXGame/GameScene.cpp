@@ -1,5 +1,6 @@
 #include "GameScene.h"
 #include "3d/AxisIndicator.h"
+#include "EffectParticleSystem.h"
 #include <cmath>
 #include <cstdlib>
 #include <ctime>
@@ -27,6 +28,7 @@ GameScene::~GameScene() {
 	// デストラクタ
 	delete cameraController_;
 
+	delete effectParticles_; // ★ 追加
 	delete rain_;
 	delete background_;
 	delete stage_;
@@ -51,7 +53,7 @@ void GameScene::Initialize() {
 
 	debugCamera_ = new KamataEngine::DebugCamera(WinApp::kWindowWidth, WinApp::kWindowHeight);
 
-	AxisIndicator::GetInstance()->SetVisible(true);
+	AxisIndicator::GetInstance()->SetVisible(false);
 	AxisIndicator::GetInstance()->SetTargetCamera(&camera_);
 
 	playerTex_ = TextureManager::Load("uvChecker.png");
@@ -75,13 +77,13 @@ void GameScene::Initialize() {
 	skydome_->Initialize(modelSkydome_, &camera_);
 
 	// レールカメラの生成と初期化
-	// Initialize の末尾(railCamera_ の生成部分を置き換え)
 	cameraController_ = new CameraController();
 	cameraController_->Initialize();
 	cameraController_->SetTarget(player_);
+	cameraController_->SetMode(CameraMode::ThirdPerson);
 	cameraController_->Reset();
 
-	// ライティング（夜）。天球以外の全モデルに適用（月は自ら光る見た目にするため適用しない）
+	// ライティング（夜）。天球以外の全モデルに適用
 	lighting_ = new LightingManager();
 	lighting_->Initialize();
 	lighting_->Apply(model_);
@@ -105,19 +107,36 @@ void GameScene::Initialize() {
 	modelMoon_ = Model::CreateFromOBJ("moon");
 	lighting_->Apply(modelFrame_);
 	lighting_->Apply(modelStar_);
+	lighting_->Apply(modelMoon_); // ★ 月にも、ライト（月のポイントライト・平行光）を適用する
 	background_ = new BackgroundBox();
 	background_->Initialize(modelFrame_, modelStar_, modelMoon_);
 
-	// GPUパーティクル（雨）
+	// ★ 1. まずパーティクル用モデルを読み込む
 	modelParticle_ = Model::CreateFromOBJ("particle");
+
+	// ★ 2. GPUパーティクル（雨）の初期化
 	rain_ = new ParticleSystem();
 	rain_->Initialize(modelParticle_);
+
+	// ★ 3. 外部シェーダ＋Resources/particleを使ったエフェクトパーティクルの初期化（stage_・player_生成後に行う）
+	effectParticles_ = new EffectParticleSystem();
+	effectParticles_->Initialize(modelParticle_);
+	stage_->SetEffectParticleSystem(effectParticles_);
+	player_->SetEffectParticleSystem(effectParticles_);
+
+	wasPlayerOnGround_ = false;
 }
 
 void GameScene::Update() {
+
 #ifdef _DEBUG
 	if (input_->TriggerKey(DIK_P)) {
 		isDebugCameraActive_ = !isDebugCameraActive_;
+	}
+
+	// ★ ゲーム終了条件（仮：Enterキーでエンドシーンへ遷移）
+	if (input_->TriggerKey(DIK_RETURN)) {
+		isFinished_ = true;
 	}
 #endif
 
@@ -169,9 +188,16 @@ void GameScene::Update() {
 	skydome_->Update();
 
 	// ステージの生成(先にやる：プレイヤーが足場を参照する)
-	stage_->Update(player_->GetWorldPosition().y);
+	stage_->Update(player_->GetWorldPosition().y, player_->GetWorldPosition().z);
 
 	player_->Update();
+
+	// ★ 追加: プレイヤーがジャンプ後にステージへ着地した瞬間を検知して上下揺れ＆裏面パーティクル発生
+	bool isOnGround = player_->IsOnGround();
+	if (isOnGround && !wasPlayerOnGround_) {
+		stage_->TriggerLandingShake(player_->GetWorldPosition().y);
+	}
+	wasPlayerOnGround_ = isOnGround;
 
 	lighting_->Update(player_->GetWorldPosition());
 	background_->Update(player_->GetWorldPosition(), lighting_->GetLightGroup());
@@ -233,19 +259,29 @@ void GameScene::Update() {
 	// 6. マネージャに集約したコライダー全体の当たり判定を一括実行
 	collisionManager_->CheckAllCollisions();
 
+	// ★ 追加: エフェクトパーティクル用 ImGui パネル更新
+	// ★ エフェクトパーティクル用 ImGui パネル更新（カメラオフセットを渡す）
+	if (effectParticles_) {
+		effectParticles_->UpdateImGui(player_->GetWorldPosition(), cameraController_->GetTargetOffset());
+	}
+
 	// ----------------------------------------------------
 }
 
 void GameScene::Draw() {
+
+	// ★ ステージ描画（内部で Model::PreDraw(kNone) / PostDraw を行うため外に出す）
+	stage_->Draw(camera_);
+
+	// ★ プレイヤーと弾描画（内部で Model::PreDraw / PostDraw を行うため外に出す）
+	player_->Draw(&camera_);
+
 	Model::PreDraw();
 
 	// 天球の描画
 	skydome_->Draw();
 
 	background_->Draw(camera_);
-	stage_->Draw(camera_);
-
-	player_->Draw(&camera_);
 
 	for (Enemy* enemy : enemies_) {
 		enemy->Draw(camera_);
@@ -257,4 +293,8 @@ void GameScene::Draw() {
 
 	// GPUパーティクル（雨）
 	rain_->Draw(camera_, player_->GetWorldPosition());
+
+	// ★ 外部シェーダパーティクル（ステージ裏面着地・弾命中）
+	Vector3 effectCenter = effectParticles_->IsUseCameraOffsetPos() ? effectParticles_->GetDebugSpawnPos() : player_->GetWorldPosition();
+	effectParticles_->Draw(camera_, effectCenter);
 }

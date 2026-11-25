@@ -26,6 +26,9 @@ public:
 	CameraMode GetMode() const { return mode_; }
 	const KamataEngine::Camera& GetCamera() const { return camera_; }
 
+	// ★ 追加: 現在のターゲットオフセットを取得
+	const KamataEngine::Vector3& GetTargetOffset() const { return targetOffset_; }
+
 private:
 	KamataEngine::Camera camera_;
 	Player* target_ = nullptr;

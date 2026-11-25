@@ -1,5 +1,5 @@
-#include "GameScene.h"
 #include "Kamataengine.h"
+#include "SceneManager.h"
 #include <Windows.h>
 
 using namespace KamataEngine;
@@ -14,8 +14,9 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 	// ImGuiManagerインスタンスの取得
 	ImGuiManager* imguiManager = ImGuiManager::GetInstance();
 
-	GameScene* gameScene = new GameScene();
-	gameScene->Initialize();
+	// ★ シーンマネージャの生成と初期化
+	SceneManager* sceneManager = new SceneManager();
+	sceneManager->Initialize();
 
 	// メインループ
 	while (true) {
@@ -27,8 +28,8 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		// ImGui受付開始
 		imguiManager->Begin();
 
-		// ゲームシーンの更新
-		gameScene->Update();
+		// シーンマネージャの更新
+		sceneManager->Update();
 
 		// ImGui受付終了
 		imguiManager->End();
@@ -36,8 +37,8 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 		// 描画開始
 		dxCommon->PreDraw();
 
-		// ゲームシーンの描画
-		gameScene->Draw();
+		// シーンマネージャの描画
+		sceneManager->Draw();
 
 		// ImGui描画
 		imguiManager->Draw();
@@ -50,8 +51,8 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 	Finalize();
 
 	// 開放処理
-	delete gameScene;
-	gameScene = nullptr;
+	delete sceneManager;
+	sceneManager = nullptr;
 
 	return 0;
 }

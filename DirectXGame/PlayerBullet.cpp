@@ -1,5 +1,6 @@
 #include "PlayerBullet.h"
 #include <cassert>
+#include "EffectParticleSystem.h"
 
 using namespace KamataEngine;
 
@@ -58,6 +59,11 @@ void PlayerBullet::Update() {
 }
 
 void PlayerBullet::OnCollision() {
+	// 当たったら命中位置にパーティクルを発生させる
+	if (!isDead_ && effectParticles_) {
+		effectParticles_->EmitBulletHit(GetWorldPosition());
+	}
+
 	// 当たったら消える（デスフラグを立てる）
 	isDead_ = true;
 }

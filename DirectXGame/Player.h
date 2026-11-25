@@ -6,8 +6,9 @@
 #include <list>
 
 class StageManager;
-class Enemy;       // ★ 前方宣言
-class EnemyBullet; // ★ 前方宣言
+class Enemy;                // ★ 前方宣言
+class EnemyBullet;          // ★ 前方宣言
+class EffectParticleSystem; // ★ 前方宣言
 
 /// <summary>
 /// プレイヤークラス（Colliderを継承）
@@ -22,6 +23,9 @@ public:
 
 	// 更新
 	void Update();
+
+	// ★ 移動や入力を行わず行列だけ更新する（TitleScene / EndScene の静止表示用）
+	void UpdateMatrix();
 
 	// 描画
 	void Draw(KamataEngine::Camera* camera);
@@ -38,6 +42,12 @@ public:
 
 	// ★ 敵リストの設定（自動照準用）
 	void SetEnemies(const std::list<Enemy*>* enemies) { enemies_ = enemies; }
+
+	// ★ 追加: 弾命中パーティクル用のエフェクトシステムを設定
+	void SetEffectParticleSystem(EffectParticleSystem* effectParticles) { effectParticles_ = effectParticles; }
+
+	// ★ 追加: 接地状態の取得（着地揺れ・裏面パーティクル判定用）
+	bool IsOnGround() const { return onGround_; }
 
 private:
 	/// <summary>
@@ -60,6 +70,9 @@ private:
 
 	// ★ 敵リストへの参照（所有権なし）
 	const std::list<Enemy*>* enemies_ = nullptr;
+
+	// ★ 追加: 弾命中パーティクル用のエフェクトシステムへの参照
+	EffectParticleSystem* effectParticles_ = nullptr;
 
 	// ★ 縦方向（Z軸）の速度とジャンプ状態
 	float velocityZ_ = 0.0f;

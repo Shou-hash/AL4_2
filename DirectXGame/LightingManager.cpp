@@ -60,8 +60,9 @@ void LightingManager::Initialize() {
 	lightGroup_->Update();
 }
 
-// 月の座標
-Vector3 LightingManager::GetMoonPosition(const Vector3& playerPos) { return {playerPos.x + moonOffset_.x, playerPos.y + moonOffset_.y, playerPos.z + moonOffset_.z}; }
+// 月の座標: X(左右)・Y(前進方向)は、プレイヤーに追従する。Z(落下方向)は、プレイヤーに追従せず固定にする
+// (プレイヤー・カメラが落ちても、月は、一緒に落ちない。背景の箱の中心 Z = 0 と同じ基準)
+Vector3 LightingManager::GetMoonPosition(const Vector3& playerPos) { return {playerPos.x + moonOffset_.x, playerPos.y + moonOffset_.y, moonOffset_.z}; }
 
 void LightingManager::Update(const Vector3& playerPos) {
 	// 環境光

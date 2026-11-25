@@ -1,4 +1,5 @@
 #include "StageManager.h"
+#include "EffectParticleSystem.h"
 #include "Matrix4x4.h"
 #include <algorithm>
 #include <cassert>
@@ -78,7 +79,52 @@ void StageManager::BuildProfile(ModelInfo& info) {
 	info.frontTop = std::isnan(info.top[0]) ? info.maxZ : info.top[0];
 }
 
-void StageManager::Update(float playerY) {
+void StageManager::TriggerLandingShake(float playerY) {
+	// ステージの着地上下揺れ定数
+	constexpr float kLandingShakeAmp = 0.75f;
+
+	for (const auto& stage : stages_) {
+		if (playerY < stage->minY || playerY > stage->maxY) {
+			continue;
+		}
+		stage->shakeAmp = kLandingShakeAmp;
+		stage->shakeTime = 0.0f;
+
+		// ★ 変更: 裏面のエフェクトは、そのステージに初めて着地したとき(到着したとき)だけ出す。ジャンプのたびには、出さない
+		if (!stage->arrived) {
+			stage->arrived = true;
+			stage->backEffectTime = kBackEffectDuration;
+			stage->backEffectTimer = 0.0f;
+			EmitBackEffect(*stage, playerY, kBackEffectArrivalBursts, kBackEffectParticles); // 到着した瞬間: 横幅いっぱいに、まとめて出す
+		}
+		break;
+	}
+}
+
+void StageManager::EmitBackEffect(const Stage& stage, float centerY, int burstCount, int particlesPerBurst) {
+	if (!effectParticles_) {
+		return;
+	}
+	const ModelInfo& m = infos_[stage.modelIndex];
+
+	// 裏面の Z: ワールド Z = 原点の Z − モデルの Z (Y 軸 180 度回転で、Z が反転する)。モデルの一番奥(minZ)の面の、少し裏
+	const float backZ = stage.baseZ - m.minZ * kStageScale + 0.4f;
+	// 横幅: ステージの中心は X = 0。幅の 9 割の範囲に散らばす
+	const float halfWidth = (m.maxY - m.minY) * 0.5f * kStageScale * 0.9f;
+
+	for (int i = 0; i < burstCount; ++i) {
+		const float rx = static_cast<float>(rand()) / RAND_MAX * 2.0f - 1.0f; // -1 〜 1
+		const float ry = static_cast<float>(rand()) / RAND_MAX;               // 0 〜 1
+		const float x = rx * halfWidth;
+		float y = centerY - kBackEffectRangeBehind + ry * (kBackEffectRangeBehind + kBackEffectRangeAhead);
+		y = (std::min)((std::max)(y, stage.minY), stage.maxY); // このステージの範囲に収める
+		effectParticles_->EmitStageBack({x, y, backZ}, particlesPerBurst, kBackEffectDirectionZ);
+	}
+}
+
+void StageManager::Update(float playerY, float playerZ) {
+	(void)playerZ;
+
 	while (cursor_ < playerY + kSpawnAhead) {
 		if (stages_.size() > 1 && stages_.front()->maxY < playerY - kRemoveBehind) {
 			// 破棄せず先頭を末尾へ回して再利用（GPUが使用中のリソースを解放しないため）
@@ -88,6 +134,54 @@ void StageManager::Update(float playerY) {
 			stages_.push_back(std::make_unique<Stage>());
 			stages_.back()->worldTransform.Initialize();
 			Place(*stages_.back());
+		}
+	}
+
+	// ★ 追加: 到着したステージの裏面から、しばらくの間、パーティクルを出し続ける
+	constexpr float kEffectDt = 1.0f / 60.0f;
+	for (const auto& stage : stages_) {
+		if (stage->backEffectTime <= 0.0f) {
+			continue;
+		}
+		stage->backEffectTime -= kEffectDt;
+		stage->backEffectTimer -= kEffectDt;
+		if (stage->backEffectTimer <= 0.0f) {
+			stage->backEffectTimer = kBackEffectInterval;
+			EmitBackEffect(*stage, playerY, kBackEffectBursts, kBackEffectParticles);
+		}
+	}
+
+	// ステージのブロックを描画する、カメラからの縦方向の距離（これを超えたら更新しない）
+	constexpr float kStageDrawRangeY = 80.0f;
+	constexpr float kShakeFrequency = 34.0f;
+	const float dt = 1.0f / 60.0f;
+
+	// ステージタイルのワールド行列更新（着地時上下揺れ）
+	for (const auto& stage : stages_) {
+		if (!stage) {
+			continue;
+		}
+		if (std::fabs(stage->worldTransform.translation_.y - playerY) > kStageDrawRangeY) {
+			continue;
+		}
+
+		if (stage->shakeAmp > 0.001f) {
+			stage->shakeTime += dt;
+			stage->shakeAmp *= std::pow(0.06f, dt); // 約0.6秒で滑らかに停止
+			float offsetZ = std::sin(stage->shakeTime * kShakeFrequency) * stage->shakeAmp;
+
+			WorldTransform& wt = stage->worldTransform;
+			wt.translation_.z = stage->baseZ + offsetZ;
+			Matrix4x4 affineMatrix = MakeAffineMatrix(wt.scale_, wt.rotation_, wt.translation_);
+			wt.matWorld_ = affineMatrix;
+			wt.TransferMatrix();
+		} else if (stage->shakeAmp > 0.0f) {
+			stage->shakeAmp = 0.0f;
+			WorldTransform& wt = stage->worldTransform;
+			wt.translation_.z = stage->baseZ;
+			Matrix4x4 affineMatrix = MakeAffineMatrix(wt.scale_, wt.rotation_, wt.translation_);
+			wt.matWorld_ = affineMatrix;
+			wt.TransferMatrix();
 		}
 	}
 }
@@ -108,6 +202,14 @@ void StageManager::Place(Stage& stage) {
 
 	// 手前端をcursor_に、上面をkGroundZに、横幅(X)の中心をX=0に合わせる
 	wt.translation_ = {(m.minY + m.maxY) * 0.5f * s, stage.minY + m.maxX * s, kGroundZ + m.frontTop * s};
+
+	// ★ 追加: 上下揺れの基準Z座標を保存し、揺れ状態をリセット
+	stage.baseZ = wt.translation_.z;
+	stage.shakeAmp = 0.0f;
+	stage.shakeTime = 0.0f;
+	stage.arrived = false; // 再利用されたステージは、また「到着」できる
+	stage.backEffectTime = 0.0f;
+	stage.backEffectTimer = 0.0f;
 
 	// ★ MakeAffineMatrix で回転を含めて行列を生成
 	wt.matWorld_ = MakeAffineMatrix(wt.scale_, wt.rotation_, wt.translation_);

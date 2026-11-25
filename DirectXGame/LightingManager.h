@@ -15,7 +15,7 @@ public:
 	// モデルにこのライトを適用する（描画前に1回でよい）
 	void Apply(KamataEngine::Model* model) { model->SetLightGroup(lightGroup_); }
 
-	// 月の位置（画面の左・上・奥）。月モデルの配置にも使う
+	// 月の位置（画面の左・上・奥）。月モデルの配置にも使う。Z（落下方向）はプレイヤーに追従しない（落ちても、月は落ちない）
 	static KamataEngine::Vector3 GetMoonPosition(const KamataEngine::Vector3& playerPos);
 
 	KamataEngine::LightGroup* GetLightGroup() const { return lightGroup_; }

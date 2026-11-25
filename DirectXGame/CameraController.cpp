@@ -123,6 +123,8 @@ void CameraController::Reset() {
 void CameraController::Update() {
 	assert(target_);
 
+#ifdef _DEBUG
+
 	// 視点切り替え
 	Input* input = Input::GetInstance();
 	if (input->TriggerKey(DIK_1)) {
@@ -132,6 +134,8 @@ void CameraController::Update() {
 	} else if (input->TriggerKey(DIK_3)) {
 		SetMode(CameraMode::RightSide);
 	}
+
+#endif // _DEBUG
 
 	Vector3 p = target_->GetWorldPosition();
 	destination_ = {p.x + targetOffset_.x, p.y + targetOffset_.y, p.z + targetOffset_.z};

@@ -4,6 +4,8 @@
 #include "Collider.h"
 #include "KamataEngine.h"
 
+class EffectParticleSystem;
+
 /// <summary>
 /// 自キャラの弾（Colliderを継承）
 /// </summary>
@@ -16,6 +18,9 @@ public:
 	/// 初期化
 	/// </summary>
 	void Initialize(KamataEngine::Model* model, const KamataEngine::Vector3& position, const KamataEngine::Vector3& velocity);
+
+	// 命中パーティクル発生用のエフェクトシステムを設定
+	void SetEffectParticleSystem(EffectParticleSystem* effectParticles) { effectParticles_ = effectParticles; }
 
 	/// <summary>
 	/// 更新
@@ -38,6 +43,7 @@ private:
 	KamataEngine::WorldTransform worldTransform_;
 	KamataEngine::Model* model_ = nullptr;
 	uint32_t textureHandle_ = 0u;
+	EffectParticleSystem* effectParticles_ = nullptr;
 
 	// 速度
 	KamataEngine::Vector3 velocity_;

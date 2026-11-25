@@ -1,7 +1,8 @@
 #include "Player.h"
 #include "CollisionConfig.h" // ★ 衝突設定のインクルードを追加
-#include "Enemy.h"           // ★ 自動照準用にインクルード
-#include "EnemyBullet.h"     // ★ 敵弾照準用にインクルード
+#include "EffectParticleSystem.h"
+#include "Enemy.h"       // ★ 自動照準用にインクルード
+#include "EnemyBullet.h" // ★ 敵弾照準用にインクルード
 #include "Matrix4x4.h"
 #include "StageManager.h"
 #include <algorithm>
@@ -57,6 +58,12 @@ void Player::Initialize(KamataEngine::Model* model, uint32_t textureHandle) {
 	SetCollisionMask(~kCollisionAttributePlayer);
 }
 
+void Player::UpdateMatrix() {
+	// 行列の再計算（MakeAffineMatrixで回転・拡大・平行移動を合成）
+	worldTransform_.matWorld_ = MakeAffineMatrix(worldTransform_.scale_, worldTransform_.rotation_, worldTransform_.translation_);
+	worldTransform_.TransferMatrix();
+}
+
 void Player::Update() {
 	// デスフラグの立った弾を削除
 	bullets_.remove_if([](PlayerBullet* bullet) {
@@ -76,11 +83,11 @@ void Player::Update() {
 	}
 
 	// ---- 自動前進＋ジャンプ（-Zが空、+Zが地面）----
-	const float kRunSpeed = 0.25f;     // 自動前進(+Y)の速さ
-	const float kJumpPower = 0.45f;    // ジャンプの初速(空である-Z軸方向へ飛ぶ)
-	const float kGravity = 0.02f;      // 重力(地面である+Z軸方向へ引っ張る)
-	const float kStepTolerance = 1.0f; // 地形に沿って登れる/降りられる段差
-	const float kFallLimitZ = 30.0f;   // これより下(+Z方向)に落ちたら復帰
+	constexpr float kRunSpeed = 0.25f;     // 自動前進(+Y)の速さ
+	constexpr float kJumpPower = 0.45f;    // ジャンプの初速(空である-Z軸方向へ飛ぶ)
+	constexpr float kGravity = 0.02f;      // 重力(地面である+Z軸方向へ引っ張る)
+	constexpr float kStepTolerance = 1.0f; // 地形に沿って登れる/降りられる段差
+	constexpr float kFallLimitZ = 30.0f;   // これより下(+Z方向)に落ちたら復帰
 
 	worldTransform_.translation_.y += kRunSpeed;
 
@@ -97,7 +104,7 @@ void Player::Update() {
 			worldTransform_.translation_.z = standZ;
 			velocityZ_ = 0.0f;
 			// ジャンプ（↑キーで -Z(空) 方向にジャンプ）
-			if (input_->TriggerKey(DIK_UP)) {
+			if (input_->TriggerKey(DIK_UP) || input_->TriggerKey(DIK_W)) {
 				velocityZ_ = -kJumpPower;
 				onGround_ = false;
 			}
@@ -148,8 +155,8 @@ void Player::Update() {
 void Player::Attack() {
 	// SPACEキーが押された時のみ発射（手動発射）
 	if (input_->TriggerKey(DIK_SPACE)) {
-		const float kBulletSpeed = 1.0f;
-		const float kSearchRadius = 50.0f; // ロックオン対象を探す有効範囲
+		constexpr float kBulletSpeed = 1.0f;
+		constexpr float kSearchRadius = 50.0f; // ロックオン対象を探す有効範囲
 		Vector3 playerPos = GetWorldPosition();
 
 		Vector3 targetPos{};
@@ -204,6 +211,9 @@ void Player::Attack() {
 		// 弾を生成し、初期化
 		PlayerBullet* newBullet = new PlayerBullet();
 		newBullet->Initialize(model_, worldTransform_.translation_, velocity);
+
+		// ★ 追加: 命中時のパーティクル発生システムを設定
+		newBullet->SetEffectParticleSystem(effectParticles_);
 
 		// ★ プレイヤーの弾にも衝突属性とマスクを設定（プレイヤー陣営として扱う）
 		newBullet->SetCollisionAttribute(kCollisionAttributePlayer);
